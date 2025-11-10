@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import os
-import requests # Added requests for robust data fetching
+import requests 
 from io import StringIO
 
 # --- Configuration and Constants ---
@@ -12,8 +12,9 @@ SHEET_ID = '16z_vMVAmUfQz6rta9Xk62gqlTdUqKVAtjp1HDQmC-x4'
 # GID for the "Sheet4 (2)" tab
 GID = '34645063' 
 
-# Construct the public CSV export URL
-DATA_URL = f'https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={GID}'
+# Construct the public CSV export URL using the GViz Query endpoint
+# This method is more stable for handling sheets with complex formatting/merged cells.
+DATA_URL = f'https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID}'
 
 # Column Mapping from Original Sheet Headers to Clean Names
 # NOTE: This mapping must exactly match the headers in your Google Sheet (Row 1).
@@ -50,13 +51,13 @@ COLOR_PENDING = '#ff0000'  # Red (Pending for PFMS)
 @st.cache_data(ttl=60)
 def load_and_clean_data(url):
     """
-    Loads data directly from the public Google Sheet CSV export URL using requests
-    for robust data fetching, and performs necessary cleaning.
+    Loads data directly from the robust Google Sheets GViz endpoint, ensuring clean CSV output.
     """
     try:
         # 1. Use requests to get the content
+        # The GViz endpoint is very reliable for public CSV output.
         response = requests.get(url)
-        response.raise_for_status()  # Check for HTTP errors (like 404, 403, etc.)
+        response.raise_for_status() 
         
         # 2. Read the content string into pandas as a CSV
         df = pd.read_csv(StringIO(response.text))
@@ -86,7 +87,7 @@ def load_and_clean_data(url):
         return df
 
     except requests.exceptions.RequestException as e:
-        # Specifically handle request errors (network, timeout, 400s/500s)
+        # Specifically handle request errors
         st.error(f"Failed to fetch data from Google Sheet. Please double-check the sheet URL/GID and ensure it is shared publicly. Error: {e}")
         return pd.DataFrame()
     except Exception as e:
@@ -221,7 +222,7 @@ else:
             color='Status',
             orientation='h',
             title=f"Released vs. Pending Amounts by Division",
-            color_discrete_map={'Released': COLOR_RELEASED, 'Pending': COLOR_PENDING},
+            color_discrete_map={'Released': COLOR_RELEASEED, 'Pending': COLOR_PENDING},
             template="plotly_white",
             height=500
         )
