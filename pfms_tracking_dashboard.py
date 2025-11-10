@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import os
+import requests # Added requests for robust data fetching
 from io import StringIO
 
 # --- Configuration and Constants ---
@@ -49,11 +50,16 @@ COLOR_PENDING = '#ff0000'  # Red (Pending for PFMS)
 @st.cache_data(ttl=60)
 def load_and_clean_data(url):
     """
-    Loads data directly from the public Google Sheet CSV export URL and performs necessary cleaning.
+    Loads data directly from the public Google Sheet CSV export URL using requests
+    for robust data fetching, and performs necessary cleaning.
     """
     try:
-        # Load the full data from the CSV export
-        df = pd.read_csv(url)
+        # 1. Use requests to get the content
+        response = requests.get(url)
+        response.raise_for_status()  # Check for HTTP errors (like 404, 403, etc.)
+        
+        # 2. Read the content string into pandas as a CSV
+        df = pd.read_csv(StringIO(response.text))
         
         # Rename columns using the mapping
         df = df.rename(columns=CLEAN_COLUMN_NAMES, errors='ignore')
@@ -79,8 +85,12 @@ def load_and_clean_data(url):
         st.sidebar.success("Data loaded successfully from Google Sheet URL (Refreshed every 60s).")
         return df
 
+    except requests.exceptions.RequestException as e:
+        # Specifically handle request errors (network, timeout, 400s/500s)
+        st.error(f"Failed to fetch data from Google Sheet. Please double-check the sheet URL/GID and ensure it is shared publicly. Error: {e}")
+        return pd.DataFrame()
     except Exception as e:
-        st.error(f"An error occurred during data loading from Google Sheets. Ensure the sheet is public. Error: {e}")
+        st.error(f"An unexpected error occurred during data processing. Error: {e}")
         return pd.DataFrame()
 
 
