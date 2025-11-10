@@ -42,7 +42,7 @@ CURRENCY_LABEL = "INR (Cr)"
 
 # Define Status Colors (Used in KPIs and Charts)
 COLOR_VETTING = '#ffc72c'  # Yellow (KPI Header/Vetting)
-COLOR_RELEASED = '#1f77b4' # Blue (Released by PFMS)
+COLOR_RELEASED = '#1f77b4' # Blue (Released by PFMS) <-- CORRECTED
 COLOR_PENDING = '#ff0000'  # Red (Pending for PFMS)
 
 
@@ -55,7 +55,6 @@ def load_and_clean_data(url):
     """
     try:
         # 1. Use requests to get the content
-        # The GViz endpoint is very reliable for public CSV output.
         response = requests.get(url)
         response.raise_for_status() 
         
@@ -222,7 +221,7 @@ else:
             color='Status',
             orientation='h',
             title=f"Released vs. Pending Amounts by Division",
-            color_discrete_map={'Released': COLOR_RELEASEED, 'Pending': COLOR_PENDING},
+            color_discrete_map={'Released': COLOR_RELEASED, 'Pending': COLOR_PENDING}, # FIXED: Used COLOR_RELEASED
             template="plotly_white",
             height=500
         )
