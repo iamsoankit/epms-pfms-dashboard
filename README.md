@@ -1,0 +1,1 @@
+This repository hosts a Streamlit application designed to track the financial workflow from EPMS Vetting to PFMS Release, clearly highlighting the status of released and pending amounts across various divisions and schemes.
