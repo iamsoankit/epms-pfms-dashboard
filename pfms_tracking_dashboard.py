@@ -13,37 +13,44 @@ SHEET_ID = '16z_vMVAmUfQz6rta9Xk62gqlTdUqKVAtjp1HDQmC-x4'
 GID = '34645063' 
 
 # Construct the public CSV export URL using the GViz Query endpoint
-# This method is more stable for handling sheets with complex formatting/merged cells.
 DATA_URL = f'https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID}'
 
 # Column Mapping from Original Sheet Headers to Clean Names
-# NOTE: This mapping must exactly match the headers in your Google Sheet (Row 1).
+# UPDATED MAPPING BASED ON NEW KPI/FILTER REQUIREMENTS
 CLEAN_COLUMN_NAMES = {
     'SNo': 'SNo',
     'Investigator': 'Investigator',
     'Institute Name-1': 'Institute_Name',
     'Division-1': 'Division',
     'Programme/Scheme': 'Programme_Scheme',
-    'Project Type': 'Project_Type',
     'Umbrella Scheme': 'Umbrella_Scheme',
-    'Budget Type': 'Budget_Type',
+    
+    # NEW KPI & FILTER COLUMNS
+    'Sanction File No.-1': 'Sanction_File_No',
+    'Budget Head-1': 'Budget_Head',
+    'Diary No.(General/Capital/Salary)-1': 'Diary_No',
     'DSO-1': 'DSO',
-    # Key Financial Columns
+    'Project Type': 'Project_Type',
+    'Budget Type': 'Budget', # Renamed from 'Budget Type' to 'Budget' for consistency with request
+    
+    # Key Financial Columns (Retained)
     'Vetting Amount (in INR)': 'Vetting_Amount_INR',
     'Credite Amout': 'Released_Amount_INR'
 }
 
 # Key columns used for filtering and visualization
 FINANCIAL_COLS = ['Vetting_Amount_INR', 'Released_Amount_INR']
+KPI_COUNT_COLS = ['Sanction_File_No', 'Budget_Head', 'Diary_No'] # Columns to count
 
 # Currency and Scaling Constants (Crore = 10,000,000)
 CRORE_FACTOR = 10000000 
 CURRENCY_LABEL = "INR (Cr)" 
 
 # Define Status Colors (Used in KPIs and Charts)
-COLOR_VETTING = '#ffc72c'  # Yellow (KPI Header/Vetting)
-COLOR_RELEASED = '#1f77b4' # Blue (Released by PFMS) <-- CORRECTED
+COLOR_VETTING = '#ffc72c'  # Yellow (Vetting/KPI Header)
+COLOR_RELEASED = '#1f77b4' # Blue (Released by PFMS)
 COLOR_PENDING = '#ff0000'  # Red (Pending for PFMS)
+COLOR_COUNT = '#6C757D'    # Gray/Count Color
 
 
 # --- Data Loading and Preprocessing ---
@@ -81,6 +88,11 @@ def load_and_clean_data(url):
         else:
             st.error("Financial columns (Vetting/Released) not found after renaming. Please check the `CLEAN_COLUMN_NAMES` map.")
             return pd.DataFrame()
+            
+        # Ensure count columns are strings for consistent filtering/counting
+        for col in KPI_COUNT_COLS + ['DSO', 'Project_Type', 'Budget']:
+             if col in df.columns:
+                df[col] = df[col].astype(str)
 
         st.sidebar.success("Data loaded successfully from Google Sheet URL (Refreshed every 60s).")
         return df
@@ -107,7 +119,7 @@ st.title("💸 EPMS vs PFMS Release & Pending Status Dashboard")
 st.markdown("---")
 
 
-# --- Sidebar Filters (Cascading Filters) ---
+# --- Sidebar Filters (Cascading Filters - UPDATED) ---
 st.sidebar.header("Filter Data")
 st.sidebar.info("Use the filters below to narrow down the data scope.")
 
@@ -120,27 +132,31 @@ selected_dso = st.sidebar.selectbox("Select DSO:",
 if selected_dso != 'All DSO':
     df_filtered = df_filtered[df_filtered['DSO'] == selected_dso]
 
-# 2. Division Filter (Depends on DSO)
-df_for_div = df_filtered.copy()
-selected_division = st.sidebar.selectbox("Select Division:", 
-    options=['All Divisions'] + sorted(df_for_div['Division'].astype(str).unique().tolist())
+# 2. Project Type Filter (Depends on DSO)
+df_for_project = df_filtered.copy()
+selected_project_type = st.sidebar.selectbox("Select Project Type:", 
+    options=['All Project Types'] + sorted(df_for_project['Project_Type'].astype(str).unique().tolist())
 )
-if selected_division != 'All Divisions':
-    df_filtered = df_filtered[df_filtered['Division'] == selected_division]
+if selected_project_type != 'All Project Types':
+    df_filtered = df_filtered[df_filtered['Project_Type'] == selected_project_type]
 
-# 3. Programme/Scheme Filter (Depends on Division)
-df_for_scheme = df_filtered.copy()
-selected_scheme = st.sidebar.selectbox("Select Programme/Scheme:", 
-    options=['All Schemes'] + sorted(df_for_scheme['Programme_Scheme'].astype(str).unique().tolist())
+# 3. Budget Filter (Depends on Project Type)
+df_for_budget = df_filtered.copy()
+selected_budget = st.sidebar.selectbox("Select Budget:", 
+    options=['All Budgets'] + sorted(df_for_budget['Budget'].astype(str).unique().tolist())
 )
-if selected_scheme != 'All Schemes':
-    df_filtered = df_filtered[df_filtered['Programme_Scheme'] == selected_scheme]
+if selected_budget != 'All Budgets':
+    df_filtered = df_filtered[df_filtered['Budget'] == selected_budget]
 
-
-# --- Calculate Main KPIs on Filtered Data ---
+# --- Calculation of New KPIs on Filtered Data ---
 total_vetting = df_filtered['Vetting_Amount_INR'].sum()
 total_released = df_filtered['Released_Amount_INR'].sum()
 total_pending = df_filtered['Pending_Amount_INR'].sum()
+
+# New Count KPIs (Unique non-empty values)
+count_sanction_file = df_filtered['Sanction_File_No'].nunique()
+count_budget_head = df_filtered['Budget_Head'].nunique()
+count_diary_no = df_filtered['Diary_No'].nunique()
 
 # Scale to Crores
 vetting_cr = total_vetting / CRORE_FACTOR
@@ -152,13 +168,14 @@ release_rate = (total_released / total_vetting) * 100 if total_vetting != 0 else
 pending_rate = (total_pending / total_vetting) * 100 if total_vetting != 0 else 0
 
 
-# --- KPI Row (Custom styling for Yellow, Blue, Red indicators) ---
+# --- KPI Row (Custom styling for Yellow, Blue, Red indicators - UPDATED) ---
 st.header("Key Performance Indicators (KPIs)")
 st.markdown("The amounts below reflect the total for the selected filters, scaled to Crores INR.")
 
-col1, col2, col3, col4 = st.columns(4)
+# Split into 3 columns for Financial/Rate KPIs and 3 for Count KPIs
+col1, col2, col3 = st.columns(3)
 
-# KPI 1: Total Vetting Amount (Yellow)
+# FINANCIAL KPIs (Your Primary Metrics)
 col1.markdown(f"""
     <div style="background-color: {COLOR_VETTING}; padding: 10px; border-radius: 8px; text-align: center; color: black; font-weight: bold; box-shadow: 2px 2px 5px rgba(0,0,0,0.1);">
         <p style='margin: 0; font-size: 14px;'>Total Vetting Amount</p>
@@ -166,30 +183,46 @@ col1.markdown(f"""
     </div>
     """, unsafe_allow_html=True)
 
-# KPI 2: Released by PFMS (Blue)
 col2.markdown(f"""
     <div style="background-color: {COLOR_RELEASED}; padding: 10px; border-radius: 8px; text-align: center; color: white; font-weight: bold; box-shadow: 2px 2px 5px rgba(0,0,0,0.1);">
-        <p style='margin: 0; font-size: 14px;'>Released by PFMS (Blue Filter)</p>
+        <p style='margin: 0; font-size: 14px;'>Released by PFMS (Blue)</p>
         <p style='margin: 0; font-size: 24px;'>₹{released_cr:,.2f} {CURRENCY_LABEL}</p>
     </div>
     """, unsafe_allow_html=True)
 
-# KPI 3: Pending for PFMS (Red)
 col3.markdown(f"""
     <div style="background-color: {COLOR_PENDING}; padding: 10px; border-radius: 8px; text-align: center; color: white; font-weight: bold; box-shadow: 2px 2px 5px rgba(0,0,0,0.1);">
-        <p style='margin: 0; font-size: 14px;'>Pending for PFMS (Red Filter)</p>
+        <p style='margin: 0; font-size: 14px;'>Pending for PFMS (Red)</p>
         <p style='margin: 0; font-size: 24px;'>₹{pending_cr:,.2f} {CURRENCY_LABEL}</p>
     </div>
     """, unsafe_allow_html=True)
 
-# KPI 4: Release Rate (Uses Streamlit's built-in metric component for comparison)
-col4.metric("PFMS Release Rate", f"{release_rate:,.2f}%", delta=f"Pending: {pending_rate:,.2f}%")
+st.markdown("---")
 
+# COUNT KPIs (The remaining 3 metrics)
+st.subheader("Document Counts (Unique Items)")
+col4, col5, col6 = st.columns(3)
+
+col4.metric(
+    "Sanction File No. Count",
+    f"{count_sanction_file:,}",
+    delta_color="off"
+)
+col5.metric(
+    "Budget Head Count",
+    f"{count_budget_head:,}",
+    delta_color="off"
+)
+col6.metric(
+    "Diary No. Count",
+    f"{count_diary_no:,}",
+    delta_color="off"
+)
 
 st.markdown("---")
 
 
-# --- Main Visualizations ---
+# --- Main Visualizations (Retaining Division and Scheme charts) ---
 col_vis1, col_vis2 = st.columns(2)
 
 if df_filtered.empty:
@@ -221,7 +254,7 @@ else:
             color='Status',
             orientation='h',
             title=f"Released vs. Pending Amounts by Division",
-            color_discrete_map={'Released': COLOR_RELEASED, 'Pending': COLOR_PENDING}, # FIXED: Used COLOR_RELEASED
+            color_discrete_map={'Released': COLOR_RELEASED, 'Pending': COLOR_PENDING},
             template="plotly_white",
             height=500
         )
